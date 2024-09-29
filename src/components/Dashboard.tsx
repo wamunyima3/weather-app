@@ -3,13 +3,11 @@ import axios from 'axios';
 import { supabase } from '../supabaseClient';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, RefreshCcw, MapPin, X, Calendar, Clock, Droplet, Menu, Sun, Thermometer, Wind } from 'lucide-react';
+import { Search, RefreshCcw, MapPin, X, Menu,} from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import CurrentWeather from './CurrentWeather';
 import Forecast from './Forecast';
 import SearchHistory from './SearchHistory';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
 // Define the types for search history and forecast data
 interface SearchHistoryRecord {
@@ -102,10 +100,10 @@ const Dashboard: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+<div className="min-h-screen bg-gray-100 flex">
       {isSidebarOpen && (
         <div className="hidden md:block">
-          <SearchHistorySidebar onClose={() => setIsSidebarOpen(false)} />
+          <SearchHistory searchHistory={searchHistory} onClose={() => setIsSidebarOpen(false)} />
         </div>
       )}
       <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
@@ -120,7 +118,7 @@ const Dashboard: React.FC = () => {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left">
-                  <SearchHistorySidebar />
+                  <SearchHistory searchHistory={searchHistory} />
                 </SheetContent>
               </Sheet>
               {!isSidebarOpen && (
@@ -131,7 +129,7 @@ const Dashboard: React.FC = () => {
               )}
             </div>
           </div>
-
+          
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
             <Input
               type="text"
@@ -155,94 +153,8 @@ const Dashboard: React.FC = () => {
             </Button>
           </form>
 
-          {currentWeather && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <MapPin className="mr-2" />
-                  Current Weather in {currentWeather.city_name}, {currentWeather.country_code}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex items-center">
-                  <Thermometer className="mr-2" />
-                  <span>Temperature: {currentWeather.temp}°C (Feels like: {currentWeather.app_temp}°C)</span>
-                </div>
-                <div className="flex items-center">
-                  <Sun className="mr-2" />
-                  <span>Weather: {currentWeather.weather.description}</span>
-                </div>
-                <div className="flex items-center">
-                  <Wind className="mr-2" />
-                  <span>Wind Speed: {currentWeather.wind_spd} m/s</span>
-                </div>
-                <div className="flex items-center">
-                  <Droplet className="mr-2" />
-                  <span>Humidity: {currentWeather.rh}%</span>
-                </div>
-                <div className="flex items-center">
-                  <span>Air Quality Index: {currentWeather.aqi}</span>
-                </div>
-                <div className="flex items-center">
-                  <Clock className="mr-2" />
-                  <span>Observation Time: {currentWeather.ob_time}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {forecast && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Calendar className="mr-2" />
-                  16-Day Forecast
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="list" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="list">List View</TabsTrigger>
-                    <TabsTrigger value="grid">Grid View</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="list">
-                    <div className="space-y-4">
-                      {forecast.map((day, index) => (
-                        <Card key={index}>
-                          <CardContent className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4">
-                            <div className="font-bold">{day.datetime}</div>
-                            <div>Max: {day.max_temp.toFixed(1)}°C / Min: {day.min_temp.toFixed(1)}°C</div>
-                            <div>{day.weather.description}</div>
-                            <div>Precip: {day.precip.toFixed(1)}mm</div>
-                            <div>UV: {day.uv.toFixed(1)}</div>
-                            <div>{day.wind_cdir_full} {day.wind_spd.toFixed(1)} m/s</div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="grid">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {forecast.map((day, index) => (
-                        <Card key={index}>
-                          <CardContent className="p-4">
-                            <div className="font-bold mb-2">{day.datetime}</div>
-                            <div>Max: {day.max_temp.toFixed(1)}°C</div>
-                            <div>Min: {day.min_temp.toFixed(1)}°C</div>
-                            <div>{day.weather.description}</div>
-                            <div>Precip: {day.precip.toFixed(1)}mm</div>
-                            <div>UV: {day.uv.toFixed(1)}</div>
-                            <div>{day.wind_cdir_full}</div>
-                            <div>{day.wind_spd.toFixed(1)} m/s</div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          )}
+          {currentWeather && <CurrentWeather data={currentWeather} />}
+          {forecast && <Forecast data={forecast} />}
         </div>
       </div>
     </div>

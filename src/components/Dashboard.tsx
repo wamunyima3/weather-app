@@ -3,8 +3,8 @@ import axios from 'axios';
 import { supabase } from '../supabaseClient';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, RefreshCcw, MapPin, X, Menu, LogOut, } from 'lucide-react';
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Search, RefreshCcw, Menu, LogOut, } from 'lucide-react';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import CurrentWeather from './CurrentWeather';
 import Forecast from './Forecast';
 import SearchHistory from './SearchHistory';
@@ -15,6 +15,7 @@ import { Session } from '@supabase/supabase-js';
 
 // Define the types for search history and forecast data
 interface SearchHistoryRecord {
+  id: number;
   city: string;
   country: string;
   timestamp: string;
@@ -92,12 +93,60 @@ const Dashboard: React.FC = () => {
       setForecast(forecastResponse.data.data);
 
       // Save search to Supabase
-      const { error } = await supabase.from('search_history').insert([{ city, country }]);
+      const { error, data } = await supabase.from('search_history').insert([{ city, country }]);
       if (error) console.error('Error saving search history:', error);
+      
+
+      // Save the weather data to Supabase along with a timestamp
+      const { error: cacheError } = await supabase.from('weather_cache').upsert({
+        search_id: data?.[0]['id'],
+        data: { current_weather: currentWeather, forecast: forecast },
+        last_fetched: new Date().toISOString(),
+      });
+
+      if (cacheError) console.error('Error saving weather data to cache:', cacheError);
 
       fetchSearchHistory();
     } catch (error) {
       console.error('Failed to fetch weather data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+
+  const handleHistoryClick = async (search_id: number) => {
+    setIsLoading(true);
+
+    try {
+      // Check if cached weather data exists and is still valid (within 10 minutes)
+      const { data: cachedData, error: cacheError } = await supabase
+        .from('cached_weather')
+        .select('*')
+        .eq('search_id', search_id)
+        .single();
+
+      if (cacheError) {
+        console.error('Error fetching cached data:', cacheError);
+      } else if (cachedData) {
+        const cacheAge = new Date().getTime() - new Date(cachedData.timestamp).getTime();
+        const cacheIsValid = cacheAge < 10 * 60 * 1000; // 10 minutes in milliseconds
+
+        if (cacheIsValid) {
+          // Use cached data
+          setCurrentWeather(cachedData.current_weather);
+          setForecast(cachedData.forecast);
+        } else {
+          // Fetch new data since cache is outdated
+          // await handleSearch();
+        }
+      } else {
+        // No cached data found, fetch new data
+        // await handleSearch();
+      }
+    } catch (error) {
+      console.error('Error handling search history click:', error);
     } finally {
       setIsLoading(false);
     }
@@ -144,7 +193,7 @@ const Dashboard: React.FC = () => {
             exit={{ x: -250 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
           >
-            <SearchHistory searchHistory={searchHistory} onClose={() => setIsSidebarOpen(false)} />
+            <SearchHistory searchHistory={searchHistory} onClose={() => setIsSidebarOpen(false)} onHistoryClick={handleHistoryClick} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -165,7 +214,13 @@ const Dashboard: React.FC = () => {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left">
-                  <SearchHistory searchHistory={searchHistory} />
+                  <SheetHeader>
+                    <SheetTitle>Search History</SheetTitle>
+                    <SheetDescription>
+                      Whatever you search is stored here
+                    </SheetDescription>
+                  </SheetHeader>
+                  <SearchHistory searchHistory={searchHistory} onHistoryClick={handleHistoryClick} />
                 </SheetContent>
               </Sheet>
               {!isSidebarOpen && (

@@ -56,7 +56,7 @@ export default function Forecast({ data }: ForecastProps) {
               <TabsTrigger value="list">List View</TabsTrigger>
               <TabsTrigger value="grid">Grid View</TabsTrigger>
             </TabsList>
-            <AnimatePresence mode="wait">
+            <AnimatePresence>
               <TabsContent value="list">
                 <motion.div className="space-y-4" variants={containerVariants}>
                   {data.map((day, index) => (

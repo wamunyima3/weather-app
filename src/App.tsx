@@ -3,30 +3,35 @@ import axios from 'axios';
 import { supabase } from './supabaseClient';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Search, RefreshCcw } from 'lucide-react';
 import CurrentWeather from './components/CurrentWeather';
 import Forecast from './components/Forecast';
 import SearchHistory from './components/SearchHistory';
 
-// Define the types for the search history and forecast data
+// Define the types for search history and forecast data
 interface SearchHistoryRecord {
   city: string;
   country: string;
-  timestamp: string; // Assuming there's a timestamp field in your Supabase table
+  timestamp: string;
 }
 
 interface ForecastData {
-  temp: number;
-  // Add other properties based on the structure of your forecast data
+  max_temp: number;
+  min_temp: number;
+  weather: { description: string };
+  precip: number;
+  uv: number;
+  wind_spd: number;
+  wind_cdir_full: string;
+  datetime: string;
 }
 
 const App: React.FC = () => {
   const [city, setCity] = useState<string>('');
   const [country, setCountry] = useState<string>('');
-  const [currentWeather, setCurrentWeather] = useState<any>(null); // Type this based on the current weather data response
-  const [forecast, setForecast] = useState<ForecastData[] | null>(null); // Use appropriate typing for forecast data
-  const [searchHistory, setSearchHistory] = useState<SearchHistoryRecord[]>([]); // Properly typed search history
+  const [currentWeather, setCurrentWeather] = useState<any>(null);
+  const [forecast, setForecast] = useState<ForecastData[] | null>(null);
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
@@ -36,13 +41,14 @@ const App: React.FC = () => {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
     try {
-      const currentResponse = await axios.get(`https://api.weatherbit.io/v2.0/current`, {
+      const currentResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/current`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY },
       });
       setCurrentWeather(currentResponse.data.data[0]);
 
-      const forecastResponse = await axios.get(`https://api.weatherbit.io/v2.0/forecast/daily`, {
+      const forecastResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/forecast/daily`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY, days: 16 },
       });
       setForecast(forecastResponse.data.data);
@@ -67,7 +73,7 @@ const App: React.FC = () => {
       .limit(5);
 
     if (error) console.error('Failed to fetch search history:', error);
-    else setSearchHistory(data as SearchHistoryRecord[]); // Type assertion to handle data correctly
+    else setSearchHistory(data as SearchHistoryRecord[]);
   };
 
   return (

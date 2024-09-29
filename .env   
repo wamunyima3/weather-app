@@ -1,5 +1,0 @@
-VITE_SUPABASE_URL = https://krzoawlazrrtbaihkmli.supabase.co
-VITE_SUPABASE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtyem9hd2xhenJydGJhaWhrbWxpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjc1MDY5MTUsImV4cCI6MjA0MzA4MjkxNX0.egM12H962QEnfK22TwylnU9sGRZI7DeG0epXLvzAXTw
-
-VITE_WEATHER_URL = https://api.weatherbit.io/v2.0
-VITE_WEATHER_API =

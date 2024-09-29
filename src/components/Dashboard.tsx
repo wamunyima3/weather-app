@@ -3,11 +3,15 @@ import axios from 'axios';
 import { supabase } from '../supabaseClient';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, RefreshCcw, MapPin, X, Menu,} from 'lucide-react';
+import { Search, RefreshCcw, MapPin, X, Menu, LogOut, } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import CurrentWeather from './CurrentWeather';
 import Forecast from './Forecast';
 import SearchHistory from './SearchHistory';
+import { motion, AnimatePresence } from 'framer-motion';
+import AuthPage from './AuthPage';
+import { useToast } from "@/hooks/use-toast"
+import { Session } from '@supabase/supabase-js';
 
 // Define the types for search history and forecast data
 interface SearchHistoryRecord {
@@ -35,10 +39,42 @@ const Dashboard: React.FC = () => {
   const [searchHistory, setSearchHistory] = useState<SearchHistoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const { toast } = useToast()
 
   useEffect(() => {
-    fetchSearchHistory();
-  }, []);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (session) {
+      fetchSearchHistory().then((data) => setSearchHistory(data));
+    }
+  }, [session]);
+  
+
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    toast({
+      title: "Signed Out",
+      description: "You have been successfully signed out.",
+    })
+  }
+
+  if (!session) {
+    return <AuthPage />
+  }
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,48 +103,50 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const fetchSearchHistory = async () => {
+  const fetchSearchHistory = async (): Promise<SearchHistoryRecord[]> => {
     const { data, error } = await supabase
       .from('search_history')
       .select('*')
       .order('timestamp', { ascending: false })
       .limit(5);
 
-    if (error) console.error('Failed to fetch search history:', error);
-    else setSearchHistory(data as SearchHistoryRecord[]);
+    if (error) {
+      console.error('Failed to fetch search history:', error);
+      return [];
+    }
+
+    return data as SearchHistoryRecord[]; // Ensure correct type
   };
 
-  const SearchHistorySidebar = ({ onClose }: { onClose?: () => void }) => (
-    <div className="w-64 bg-white p-4 border-r border-gray-200 h-full overflow-y-auto">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Search History</h2>
-        {onClose && (
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-      <ul className="space-y-2">
-        {searchHistory.map((item, index) => (
-          <li key={index} className="flex items-center cursor-pointer hover:bg-gray-100 p-2 rounded">
-            <MapPin className="mr-2 h-4 w-4" />
-            <span>{item.city}, {item.country}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 
   return (
-<div className="min-h-screen bg-gray-100 flex">
-      {isSidebarOpen && (
-        <div className="hidden md:block">
-          <SearchHistory searchHistory={searchHistory} onClose={() => setIsSidebarOpen(false)} />
-        </div>
-      )}
+    <motion.div
+      className="min-h-screen bg-gray-100 flex"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            className="hidden md:block"
+            initial={{ x: -250 }}
+            animate={{ x: 0 }}
+            exit={{ x: -250 }}
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          >
+            <SearchHistory searchHistory={searchHistory} onClose={() => setIsSidebarOpen(false)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto space-y-6">
-          <div className="flex items-center justify-between">
+          <motion.div
+            className="flex items-center justify-between"
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
             <h1 className="text-3xl font-bold text-gray-900">Weather App</h1>
             <div className="flex space-x-2">
               <Sheet>
@@ -122,15 +160,29 @@ const Dashboard: React.FC = () => {
                 </SheetContent>
               </Sheet>
               {!isSidebarOpen && (
-                <Button variant="outline" className="hidden md:flex" onClick={() => setIsSidebarOpen(true)}>
-                  <Menu className="h-4 w-4 mr-2" />
-                  Show History
-                </Button>
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button variant="outline" className="hidden md:flex" onClick={() => setIsSidebarOpen(true)}>
+                    <Menu className="h-4 w-4 mr-2" />
+                    Show History
+                  </Button>
+                </motion.div>
               )}
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button variant="outline" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </motion.div>
             </div>
-          </div>
-          
-          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
+          </motion.div>
+
+          <motion.form
+            onSubmit={handleSearch}
+            className="flex flex-col sm:flex-row gap-4"
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
             <Input
               type="text"
               placeholder="City"
@@ -147,17 +199,23 @@ const Dashboard: React.FC = () => {
               required
               className="flex-grow"
             />
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? <RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-              Search
-            </Button>
-          </form>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? <RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                Search
+              </Button>
+            </motion.div>
+          </motion.form>
 
-          {currentWeather && <CurrentWeather data={currentWeather} />}
-          {forecast && <Forecast data={forecast} />}
+          <AnimatePresence>
+            {currentWeather && <CurrentWeather data={currentWeather} />}
+          </AnimatePresence>
+          <AnimatePresence>
+            {forecast && <Forecast data={forecast} />}
+          </AnimatePresence>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

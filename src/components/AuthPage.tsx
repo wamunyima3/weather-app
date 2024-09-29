@@ -78,6 +78,7 @@ const SignInForm = () => {
             <motion.div whileFocus="focus" variants={inputVariants}>
               <Input
                 id="password"
+                placeholder='password'
                 type={showPassword ? "text" : "password"}
                 required
                 value={password}
@@ -170,6 +171,7 @@ const SignUpForm = () => {
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
+                placeholder='password'
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

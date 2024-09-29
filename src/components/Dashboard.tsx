@@ -61,7 +61,7 @@ const Dashboard: React.FC = () => {
       fetchSearchHistory().then((data) => setSearchHistory(data));
     }
   }, [session]);
-  
+
 
 
   const handleSignOut = async () => {
@@ -104,9 +104,17 @@ const Dashboard: React.FC = () => {
   };
 
   const fetchSearchHistory = async (): Promise<SearchHistoryRecord[]> => {
+    const { data: { user } } = await supabase.auth.getUser(); // Get the authenticated user
+
+    if (!user) {
+      console.error('No user is logged in.');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('search_history')
       .select('*')
+      .eq('user_id', user.id) // Filter by user ID
       .order('timestamp', { ascending: false })
       .limit(5);
 
@@ -115,8 +123,9 @@ const Dashboard: React.FC = () => {
       return [];
     }
 
-    return data as SearchHistoryRecord[]; // Ensure correct type
+    return data as SearchHistoryRecord[];
   };
+
 
 
   return (

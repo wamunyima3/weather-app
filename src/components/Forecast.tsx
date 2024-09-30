@@ -1,7 +1,9 @@
-import { Calendar, Thermometer, CloudRain, Sun, Wind } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, Thermometer, CloudRain, Sun, Wind, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from "@/components/ui/button"
 
 interface ForecastDay {
   datetime: string;
@@ -37,6 +39,20 @@ const itemVariants = {
 };
 
 export default function Forecast({ data }: ForecastProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentView, setCurrentView] = useState<'list' | 'grid'>('list');
+  const itemsPerPage = 5;
+  const totalPages = Math.ceil(data.length / itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1); // Reset to first page when data changes
+  }, [data]);
+
+  const paginatedData = data.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   return (
     <motion.div
       variants={containerVariants}
@@ -45,21 +61,23 @@ export default function Forecast({ data }: ForecastProps) {
     >
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <Calendar className="mr-2 text-indigo-500" />
-            16-Day Forecast
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center">
+              <Calendar className="mr-2 text-indigo-500" />
+              16-Day Forecast
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="list" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+          <Tabs value={currentView} onValueChange={(value) => setCurrentView(value as 'list' | 'grid')} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="list">List View</TabsTrigger>
               <TabsTrigger value="grid">Grid View</TabsTrigger>
             </TabsList>
             <AnimatePresence>
               <TabsContent key="list" value="list">
                 <motion.div className="space-y-4" variants={containerVariants}>
-                  {data.map((day) => (
+                  {paginatedData.map((day) => (
                     <motion.div key={`list-${day.datetime}`} variants={itemVariants}>
                       <Card>
                         <CardContent className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4">
@@ -90,10 +108,10 @@ export default function Forecast({ data }: ForecastProps) {
                   ))}
                 </motion.div>
               </TabsContent>
-              <TabsContent value="grid">
-                <motion.div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" variants={containerVariants}>
-                  {data.map((day, index) => (
-                    <motion.div key={index} variants={itemVariants}>
+              <TabsContent key="grid" value="grid">
+                <motion.div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-4" variants={containerVariants}>
+                  {paginatedData.map((day) => (
+                    <motion.div key={`grid-${day.datetime}`} variants={itemVariants}>
                       <Card>
                         <CardContent className="p-4">
                           <div className="font-bold mb-2">{day.datetime}</div>
@@ -133,6 +151,25 @@ export default function Forecast({ data }: ForecastProps) {
               </TabsContent>
             </AnimatePresence>
           </Tabs>
+          <div className="flex items-center justify-center space-x-2 mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span>{currentPage} / {totalPages}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </motion.div>

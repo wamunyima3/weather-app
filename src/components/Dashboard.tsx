@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { supabase } from '../supabaseClient';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -90,18 +90,18 @@ const Dashboard: React.FC = () => {
         .single();
 
       if (searchError) {
-        throw searchError;
+        throw new Error(`Failed to save search history: ${searchError.message}`);
       }
 
       // Now check for cached data using the new search_id
-      const { data: cachedData, error: error } = await supabase
+      const { data: cachedData, error: cacheError } = await supabase
         .from('weather_cache')
         .select('*')
         .eq('search_id', searchData.id)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching cached data:', error);
+      if (cacheError && cacheError.code !== 'PGRST116') {
+        console.error('Error fetching cached data:', cacheError);
       }
 
       if (cachedData) {
@@ -130,17 +130,17 @@ const Dashboard: React.FC = () => {
       setForecast(forecastData);
 
       // Save the weather data to Supabase cache
-      const { error: cacheError } = await supabase.from('weather_cache').upsert({
+      const { error: error } = await supabase.from('weather_cache').upsert({
         search_id: searchData.id,
         data: { current_weather: currentWeatherData, forecast: forecastData },
         last_fetched: new Date().toISOString(),
       });
 
-      if (cacheError) {
-        console.error('Error saving weather data to cache:', cacheError);
+      if (error) {
+        console.error('Error saving weather data to cache:', error);
         toast({
-          title: "Error",
-          description: "Failed to cache weather data.",
+          title: "Warning",
+          description: "Failed to cache weather data. This may affect performance.",
           variant: "destructive",
         });
       }
@@ -148,9 +148,24 @@ const Dashboard: React.FC = () => {
       await fetchSearchHistory();
     } catch (error) {
       console.error('Failed to fetch weather data:', error);
+      let errorMessage = "An unexpected error occurred. Please try again.";
+
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        if (axiosError.response) {
+          errorMessage = `Server error: ${axiosError.response.status} - ${axiosError.response.statusText}`;
+        } else if (axiosError.request) {
+          errorMessage = "No response received from the server. Please check your internet connection.";
+        } else {
+          errorMessage = `Error setting up the request: ${axiosError.message}`;
+        }
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: "Error",
-        description: "Failed to fetch weather data. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

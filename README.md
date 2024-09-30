@@ -1,5 +1,3 @@
-Here's an improved version of the README file that provides better guidance for setting up the project:
-
 ```markdown
 # Weather App with React, TypeScript, Vite, and Supabase
 

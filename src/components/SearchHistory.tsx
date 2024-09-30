@@ -1,4 +1,4 @@
-import { MapPin, X } from 'lucide-react';
+import { MapPin, X, Trash2 } from 'lucide-react';
 import { Button } from "@/components/ui/button"
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -12,6 +12,7 @@ interface SearchHistorySidebarProps {
   searchHistory: SearchHistoryItem[];
   onClose?: () => void;
   onHistoryClick: (search_id: number) => void;
+  onClearHistory: () => void;
 }
 
 const containerVariants = {
@@ -33,8 +34,7 @@ const itemVariants = {
   visible: { opacity: 1, x: 0 }
 };
 
-
-export default function SearchHistory({ searchHistory, onClose, onHistoryClick }: SearchHistorySidebarProps) {
+export default function SearchHistory({ searchHistory, onClose, onHistoryClick, onClearHistory }: SearchHistorySidebarProps) {
   return (
     <motion.div
       className="w-64 bg-white p-4 border-r border-gray-200 h-full overflow-y-auto"
@@ -44,7 +44,7 @@ export default function SearchHistory({ searchHistory, onClose, onHistoryClick }
       exit="exit"
     >
       <div className="flex justify-between items-center mb-4">
-        {/* <h2 className="text-xl font-bold">Search History</h2> */}
+        <h2 className="text-xl font-bold">Search History</h2>
         {onClose && (
           <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
             <Button variant="ghost" size="icon" onClick={onClose}>
@@ -70,6 +70,23 @@ export default function SearchHistory({ searchHistory, onClose, onHistoryClick }
           ))}
         </motion.ul>
       </AnimatePresence>
+      {searchHistory.length > 0 && (
+        <motion.div
+          className="mt-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onClearHistory}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Clear History
+          </Button>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

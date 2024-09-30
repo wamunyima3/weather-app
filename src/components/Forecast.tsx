@@ -20,8 +20,8 @@ interface ForecastProps {
 
 const containerVariants = {
   hidden: { opacity: 0, y: 50 },
-  visible: { 
-    opacity: 1, 
+  visible: {
+    opacity: 1,
     y: 0,
     transition: {
       duration: 0.5,
@@ -57,10 +57,10 @@ export default function Forecast({ data }: ForecastProps) {
               <TabsTrigger value="grid">Grid View</TabsTrigger>
             </TabsList>
             <AnimatePresence>
-              <TabsContent value="list">
+              <TabsContent key="list" value="list">
                 <motion.div className="space-y-4" variants={containerVariants}>
-                  {data.map((day, index) => (
-                    <motion.div key={index} variants={itemVariants}>
+                  {data.map((day) => (
+                    <motion.div key={`list-${day.datetime}`} variants={itemVariants}>
                       <Card>
                         <CardContent className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4">
                           <div className="font-bold">{day.datetime}</div>

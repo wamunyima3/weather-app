@@ -82,15 +82,26 @@ const Dashboard: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Check if we have recent cached data
-      const { data: cachedData, error: cacheError } = await supabase
-        .from('weather_cache')
-        .select('*')
-        .eq('search_id', `${city},${country}`)
+      // First, insert the search into the search_history table
+      const { data: searchData, error: searchError } = await supabase
+        .from('search_history')
+        .insert({ city, country })
+        .select()
         .single();
 
-      if (cacheError && cacheError.code !== 'PGRST116') {
-        console.error('Error fetching cached data:', cacheError);
+      if (searchError) {
+        throw searchError;
+      }
+
+      // Now check for cached data using the new search_id
+      const { data: cachedData, error: error } = await supabase
+        .from('weather_cache')
+        .select('*')
+        .eq('search_id', searchData.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching cached data:', error);
       }
 
       if (cachedData) {
@@ -100,6 +111,7 @@ const Dashboard: React.FC = () => {
         if (cacheIsValid) {
           setCurrentWeather(cachedData.data.current_weather);
           setForecast(cachedData.data.forecast);
+          await fetchSearchHistory();
           return;
         }
       }
@@ -117,38 +129,20 @@ const Dashboard: React.FC = () => {
       const forecastData = forecastResponse.data.data;
       setForecast(forecastData);
 
-      // Save search to Supabase
-      const { error, data: searchData } = await supabase
-        .from('search_history')
-        .insert([{ city, country }])
-        .select()
-        .single();
+      // Save the weather data to Supabase cache
+      const { error: cacheError } = await supabase.from('weather_cache').upsert({
+        search_id: searchData.id,
+        data: { current_weather: currentWeatherData, forecast: forecastData },
+        last_fetched: new Date().toISOString(),
+      });
 
-      if (error) {
-        console.error('Error saving search history:', error);
+      if (cacheError) {
+        console.error('Error saving weather data to cache:', cacheError);
         toast({
           title: "Error",
-          description: "Failed to save search history.",
+          description: "Failed to cache weather data.",
           variant: "destructive",
         });
-      }
-
-      // Save the weather data to Supabase cache
-      if (searchData) {
-        const { error: cacheError } = await supabase.from('weather_cache').upsert({
-          search_id: searchData.id,
-          data: { current_weather: currentWeatherData, forecast: forecastData },
-          last_fetched: new Date().toISOString(),
-        });
-
-        if (cacheError) {
-          console.error('Error saving weather data to cache:', cacheError);
-          toast({
-            title: "Error",
-            description: "Failed to cache weather data.",
-            variant: "destructive",
-          });
-        }
       }
 
       await fetchSearchHistory();
@@ -163,7 +157,6 @@ const Dashboard: React.FC = () => {
       setIsLoading(false);
     }
   };
-
 
 
   const handleHistoryClick = async (search_id: number) => {
@@ -262,6 +255,42 @@ const Dashboard: React.FC = () => {
     return data as SearchHistoryRecord[];
   };
 
+  const handleClearHistory = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('No user is logged in.');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('search_history')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Failed to clear search history:', error);
+        toast({
+          title: "Error",
+          description: "Failed to clear search history.",
+          variant: "destructive",
+        });
+      } else {
+        setSearchHistory([]);
+        toast({
+          title: "Success",
+          description: "Search history cleared successfully.",
+        });
+      }
+    } catch (error) {
+      console.error('Error clearing search history:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while clearing search history.",
+        variant: "destructive",
+      });
+    }
+  };
 
 
   return (
@@ -280,7 +309,12 @@ const Dashboard: React.FC = () => {
             exit={{ x: -250 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
           >
-            <SearchHistory searchHistory={searchHistory} onClose={() => setIsSidebarOpen(false)} onHistoryClick={handleHistoryClick} />
+            <SearchHistory
+              searchHistory={searchHistory}
+              onClose={() => setIsSidebarOpen(false)}
+              onHistoryClick={handleHistoryClick}
+              onClearHistory={handleClearHistory}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -304,10 +338,14 @@ const Dashboard: React.FC = () => {
                   <SheetHeader>
                     <SheetTitle>Search History</SheetTitle>
                     <SheetDescription>
-                      Whatever you search is stored here
+                      Your recent searches are stored here
                     </SheetDescription>
                   </SheetHeader>
-                  <SearchHistory searchHistory={searchHistory} onHistoryClick={handleHistoryClick} />
+                  <SearchHistory
+                    searchHistory={searchHistory}
+                    onHistoryClick={handleHistoryClick}
+                    onClearHistory={handleClearHistory}
+                  />
                 </SheetContent>
               </Sheet>
               {!isSidebarOpen && (

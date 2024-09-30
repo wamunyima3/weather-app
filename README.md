@@ -132,7 +132,9 @@ Mukelabai Wamunyima
 
 Visit my portfolio at: [https://wamunyimamukelabai.vercel.app/](https://wamunyimamukelabai.vercel.app/)
 
-# live link: [weather-app-delta-lime-58.vercel.app](weather-app-delta-lime-58.vercel.app)
+# live link:
+[weather-app-delta-lime-58.vercel.app](weather-app-delta-lime-58.vercel.app)
+
 Use this email for testing other wise due to free limits on supabase you might fail to login
 # Email
 ```plaintext

@@ -131,5 +131,3 @@ To learn more about the technologies used in this project:
 Mukelabai Wamunyima
 
 Visit my portfolio at: [https://wamunyimamukelabai.vercel.app/](https://wamunyimamukelabai.vercel.app/)
-
-```plaintext

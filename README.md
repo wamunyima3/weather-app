@@ -144,3 +144,14 @@ prepmaster03@gmail.com
 ```plaintext
 123456
 ```
+
+# Example search
+### City
+```plaintext
+Ndola
+```
+
+### Country Code
+```plaintext
+ZM
+```

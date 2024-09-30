@@ -77,38 +77,88 @@ const Dashboard: React.FC = () => {
     return <AuthPage />
   }
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsLoading(true);
 
     try {
+      // Check if we have recent cached data
+      const { data: cachedData, error: cacheError } = await supabase
+        .from('weather_cache')
+        .select('*')
+        .eq('search_id', `${city},${country}`)
+        .single();
+
+      if (cacheError && cacheError.code !== 'PGRST116') {
+        console.error('Error fetching cached data:', cacheError);
+      }
+
+      if (cachedData) {
+        const cacheAge = new Date().getTime() - new Date(cachedData.last_fetched).getTime();
+        const cacheIsValid = cacheAge < 10 * 60 * 1000; // 10 minutes in milliseconds
+
+        if (cacheIsValid) {
+          setCurrentWeather(cachedData.data.current_weather);
+          setForecast(cachedData.data.forecast);
+          return;
+        }
+      }
+
+      // If no valid cache, fetch new data
       const currentResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/current`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY },
       });
-      setCurrentWeather(currentResponse.data.data[0]);
+      const currentWeatherData = currentResponse.data.data[0];
+      setCurrentWeather(currentWeatherData);
 
       const forecastResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/forecast/daily`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY, days: 16 },
       });
-      setForecast(forecastResponse.data.data);
+      const forecastData = forecastResponse.data.data;
+      setForecast(forecastData);
 
       // Save search to Supabase
-      const { error, data } = await supabase.from('search_history').insert([{ city, country }]);
-      if (error) console.error('Error saving search history:', error);
-      
+      const { error, data: searchData } = await supabase
+        .from('search_history')
+        .insert([{ city, country }])
+        .select()
+        .single();
 
-      // Save the weather data to Supabase along with a timestamp
-      const { error: cacheError } = await supabase.from('weather_cache').upsert({
-        search_id: data?.[0]['id'],
-        data: { current_weather: currentWeather, forecast: forecast },
-        last_fetched: new Date().toISOString(),
-      });
+      if (error) {
+        console.error('Error saving search history:', error);
+        toast({
+          title: "Error",
+          description: "Failed to save search history.",
+          variant: "destructive",
+        });
+      }
 
-      if (cacheError) console.error('Error saving weather data to cache:', cacheError);
+      // Save the weather data to Supabase cache
+      if (searchData) {
+        const { error: cacheError } = await supabase.from('weather_cache').upsert({
+          search_id: searchData.id,
+          data: { current_weather: currentWeatherData, forecast: forecastData },
+          last_fetched: new Date().toISOString(),
+        });
 
-      fetchSearchHistory();
+        if (cacheError) {
+          console.error('Error saving weather data to cache:', cacheError);
+          toast({
+            title: "Error",
+            description: "Failed to cache weather data.",
+            variant: "destructive",
+          });
+        }
+      }
+
+      await fetchSearchHistory();
     } catch (error) {
       console.error('Failed to fetch weather data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch weather data. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -120,33 +170,70 @@ const Dashboard: React.FC = () => {
     setIsLoading(true);
 
     try {
+      // Fetch the search history item
+      const { data: searchItem, error: searchError } = await supabase
+        .from('search_history')
+        .select('city, country')
+        .eq('id', search_id)
+        .single();
+
+      if (searchError) {
+        console.error('Error fetching search history item:', searchError);
+        toast({
+          title: "Error",
+          description: "Failed to fetch search history item.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!searchItem) {
+        console.error('Search history item not found');
+        toast({
+          title: "Error",
+          description: "Search history item not found.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Check if cached weather data exists and is still valid (within 10 minutes)
       const { data: cachedData, error: cacheError } = await supabase
-        .from('cached_weather')
+        .from('weather_cache')
         .select('*')
         .eq('search_id', search_id)
         .single();
 
-      if (cacheError) {
+      if (cacheError && cacheError.code !== 'PGRST116') {
         console.error('Error fetching cached data:', cacheError);
-      } else if (cachedData) {
-        const cacheAge = new Date().getTime() - new Date(cachedData.timestamp).getTime();
+      }
+
+      if (cachedData) {
+        const cacheAge = new Date().getTime() - new Date(cachedData.last_fetched).getTime();
         const cacheIsValid = cacheAge < 10 * 60 * 1000; // 10 minutes in milliseconds
 
         if (cacheIsValid) {
           // Use cached data
-          setCurrentWeather(cachedData.current_weather);
-          setForecast(cachedData.forecast);
-        } else {
-          // Fetch new data since cache is outdated
-          // await handleSearch();
+          setCurrentWeather(cachedData.data.current_weather);
+          setForecast(cachedData.data.forecast);
+          setCity(searchItem.city);
+          setCountry(searchItem.country);
+          return;
         }
-      } else {
-        // No cached data found, fetch new data
-        // await handleSearch();
       }
+
+      // If no valid cache, fetch new data
+      setCity(searchItem.city);
+      setCountry(searchItem.country);
+      await handleSearch();
+
     } catch (error) {
       console.error('Error handling search history click:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process search history item.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

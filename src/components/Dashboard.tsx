@@ -12,7 +12,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast"
 import { Session } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
-import debounce from 'lodash/debounce';
 
 interface SearchHistoryRecord {
   id: number;
@@ -125,12 +124,7 @@ const Dashboard: React.FC = () => {
           setIsCurrentWeatherLoading(false);
           setIsForecastLoading(false);
           return;
-        } else {
-          await supabase
-            .from('weather_cache')
-            .delete()
-            .eq('search_id', searchId);
-        }
+        } 
       }
 
       const currentResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/current`, {
@@ -186,22 +180,6 @@ const Dashboard: React.FC = () => {
       setIsForecastLoading(false);
     }
   };
-
-  const debouncedSearch = useCallback(
-    debounce(async (city: string, country: string) => {
-      if (city.trim() && country.trim()) {
-        await handleSearch();
-      }
-    }, 500),
-    []
-  );
-
-  useEffect(() => {
-    debouncedSearch(city, country);
-    return () => {
-      debouncedSearch.cancel();
-    };
-  }, [city, country, debouncedSearch]);
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -297,7 +275,7 @@ const Dashboard: React.FC = () => {
         .delete()
         .neq('id', 0);
 
-      if (error) {
+    if (error) {
         console.error('Failed to clear search history:', error);
         toast({
           title: "Error",
@@ -370,25 +348,25 @@ const Dashboard: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">Weather App</h1>
             <div className="flex space-x-2">
               <Sheet>
-                <SheetTrigger asChild>
+            <SheetTrigger asChild>
                   <Button variant="outline" className="md:hidden" aria-label="Open search history">
                     <Menu className="h-4 w-4" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left">
-                  <SheetHeader>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left">
+              <SheetHeader>
                     <SheetTitle>Search History</SheetTitle>
                     <SheetDescription>
                       Your recent searches are stored here
                     </SheetDescription>
-                  </SheetHeader>
-                  <SearchHistory
-                    searchHistory={searchHistory}
-                    onHistoryClick={handleHistoryClick}
+              </SheetHeader>
+              <SearchHistory 
+                searchHistory={searchHistory} 
+                onHistoryClick={handleHistoryClick} 
                     onClearHistory={handleClearHistory}
-                  />
-                </SheetContent>
-              </Sheet>
+              />
+            </SheetContent>
+          </Sheet>
               {!isSidebarOpen && (
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Button variant="outline" className="hidden md:flex" onClick={() => setIsSidebarOpen(true)} aria-label="Show search history">
@@ -400,8 +378,8 @@ const Dashboard: React.FC = () => {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button variant="outline" onClick={handleSignOut} aria-label="Sign out">
                   <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
+          Sign Out
+        </Button>
               </motion.div>
             </div>
           </motion.div>
@@ -434,37 +412,39 @@ const Dashboard: React.FC = () => {
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button type="submit" disabled={isLoading} aria-label="Search weather">
                 {isLoading ? <RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                Search
-              </Button>
+              Search
+            </Button>
             </motion.div>
           </motion.form>
 
           <AnimatePresence mode="wait">
-            {currentWeather && (
-              <motion.div
+          {currentWeather && (
+            <motion.div
                 key="current-weather"
                 initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
-              >
+            >
                 <CurrentWeather data={currentWeather} /*isLoading={isCurrentWeatherLoading}*/  />
-              </motion.div>
-            )}
-            {forecast && (
-              <motion.div
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {forecast && (
+            <motion.div
                 key="forecast"
                 initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
-              >
+            >
                 <Forecast data={forecast} /*isLoading={isForecastLoading}*/ />
-              </motion.div>
-            )}
-          </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
         </div>
-      </div>
+    </div>
     </motion.div>
   );
 };

@@ -315,7 +315,7 @@ export default function AuthPage() {
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
                 <TabsTrigger value="reset">Reset</TabsTrigger>
               </TabsList>
-              <AnimatePresence mode="wait">
+              <AnimatePresence>
                 <TabsContent value="signin" key="signin">
                   <SignInForm />
                 </TabsContent>

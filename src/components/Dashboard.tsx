@@ -38,8 +38,8 @@ const Dashboard: React.FC = () => {
   const [forecast, setForecast] = useState<ForecastData[] | null>(null);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isCurrentWeatherLoading, setIsCurrentWeatherLoading] = useState<boolean>(false);
-  const [isForecastLoading, setIsForecastLoading] = useState<boolean>(false);
+  // const [isCurrentWeatherLoading, setIsCurrentWeatherLoading] = useState<boolean>(false);
+  // const [isForecastLoading, setIsForecastLoading] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const { toast } = useToast();
@@ -100,8 +100,8 @@ const Dashboard: React.FC = () => {
   };
 
   const fetchWeatherData = async (searchId: number, city: string, country: string) => {
-    setIsCurrentWeatherLoading(true);
-    setIsForecastLoading(true);
+    // setIsCurrentWeatherLoading(true);
+    // setIsForecastLoading(true);
 
     try {
       const { data: cachedData, error: cacheError } = await supabase
@@ -121,8 +121,8 @@ const Dashboard: React.FC = () => {
         if (cacheIsValid) {
           setCurrentWeather(cachedData.data.current_weather);
           setForecast(cachedData.data.forecast);
-          setIsCurrentWeatherLoading(false);
-          setIsForecastLoading(false);
+          // setIsCurrentWeatherLoading(false);
+          // setIsForecastLoading(false);
           return;
         } 
       }
@@ -132,14 +132,14 @@ const Dashboard: React.FC = () => {
       });
       const currentWeatherData = currentResponse.data.data[0];
       setCurrentWeather(currentWeatherData);
-      setIsCurrentWeatherLoading(false);
+      // setIsCurrentWeatherLoading(false);
 
       const forecastResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/forecast/daily`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY, days: 16 },
       });
       const forecastData = forecastResponse.data.data;
       setForecast(forecastData);
-      setIsForecastLoading(false);
+      // setIsForecastLoading(false);
 
       await supabase.from('weather_cache').upsert({
         search_id: searchId,
@@ -176,8 +176,8 @@ const Dashboard: React.FC = () => {
         variant: "destructive",
       });
     } finally {
-      setIsCurrentWeatherLoading(false);
-      setIsForecastLoading(false);
+      // setIsCurrentWeatherLoading(false);
+      // setIsForecastLoading(false);
     }
   };
 

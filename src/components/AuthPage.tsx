@@ -285,7 +285,7 @@ export default function AuthPage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
         navigate('/dashboard')
       }

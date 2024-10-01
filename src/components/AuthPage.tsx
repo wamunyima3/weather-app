@@ -126,7 +126,7 @@ const SignUpForm = () => {
     e.preventDefault()
     setIsLoading(true)
     const redirectTo = import.meta.env.VITE_NODE_ENV === 'production'
-      ? 'https://your-app-name.vercel.app/auth/callback'
+      ? 'https://weather-app-delta-lime-58.vercel.app/auth/callback'
       : 'http://localhost:3000/auth/callback'
     const { error } = await supabase.auth.signUp({
       email: email,
@@ -225,7 +225,7 @@ const PasswordResetForm = () => {
     e.preventDefault()
     setIsLoading(true)
     const redirectTo = import.meta.env.VITE_NODE_ENV === 'production'
-      ? 'https://your-app-name.vercel.app/auth/reset-password'
+      ? 'https://weather-app-delta-lime-58.vercel.app/auth/reset-password'
       : 'http://localhost:3000/auth/reset-password'
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setIsLoading(false)

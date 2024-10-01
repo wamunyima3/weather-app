@@ -9,11 +9,10 @@ import CurrentWeather from './CurrentWeather';
 import Forecast from './Forecast';
 import SearchHistory from './SearchHistory';
 import { motion, AnimatePresence } from 'framer-motion';
-import AuthPage from './AuthPage';
 import { useToast } from "@/hooks/use-toast"
 import { Session } from '@supabase/supabase-js';
+import { useNavigate } from 'react-router-dom';
 
-// Define the types for search history and forecast data
 interface SearchHistoryRecord {
   id: number;
   city: string;
@@ -41,63 +40,67 @@ const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
-  const { toast } = useToast()
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
+      setSession(session);
+      if (!session) {
+        navigate('/');
+      }
+    });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
+      setSession(session);
+      if (!session) {
+        navigate('/');
+      }
+    });
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   useEffect(() => {
     if (session) {
-      fetchSearchHistory().then((data) => setSearchHistory(data));
+      fetchSearchHistory();
     }
   }, [session]);
 
+  const fetchSearchHistory = async () => {
+    const { data, error } = await supabase
+      .from('search_history')
+      .select('*')
+      .order('timestamp', { ascending: false })
+      .limit(5);
 
+    if (error) {
+      console.error('Failed to fetch search history:', error);
+      return;
+    }
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    toast({
-      title: "Signed Out",
-      description: "You have been successfully signed out.",
-    })
-  }
+    setSearchHistory(data as SearchHistoryRecord[]);
 
-  if (!session) {
-    return <AuthPage />
-  }
+    // If there's a last search, fetch its weather data
+    if (data && data.length > 0) {
+      const lastSearch = data[0];
+      setCity(lastSearch.city);
+      setCountry(lastSearch.country);
+      await fetchWeatherData(lastSearch.id, lastSearch.city, lastSearch.country);
+    }
+  };
 
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
+  const fetchWeatherData = async (searchId: number, city: string, country: string) => {
     setIsLoading(true);
 
     try {
-      // First, insert the search into the search_history table
-      const { data: searchData, error: searchError } = await supabase
-        .from('search_history')
-        .insert({ city, country })
-        .select()
-        .single();
-
-      if (searchError) {
-        throw new Error(`Failed to save search history: ${searchError.message}`);
-      }
-
-      // Now check for cached data using the new search_id
+      // Check for cached data
       const { data: cachedData, error: cacheError } = await supabase
         .from('weather_cache')
         .select('*')
-        .eq('search_id', searchData.id)
+        .eq('search_id', searchId)
         .single();
 
       if (cacheError && cacheError.code !== 'PGRST116') {
@@ -111,12 +114,18 @@ const Dashboard: React.FC = () => {
         if (cacheIsValid) {
           setCurrentWeather(cachedData.data.current_weather);
           setForecast(cachedData.data.forecast);
-          await fetchSearchHistory();
+          setIsLoading(false);
           return;
+        } else {
+          // Clear invalid cache
+          await supabase
+            .from('weather_cache')
+            .delete()
+            .eq('search_id', searchId);
         }
       }
 
-      // If no valid cache, fetch new data
+      // Fetch new data if cache is invalid or doesn't exist
       const currentResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/current`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY },
       });
@@ -129,23 +138,13 @@ const Dashboard: React.FC = () => {
       const forecastData = forecastResponse.data.data;
       setForecast(forecastData);
 
-      // Save the weather data to Supabase cache
-      const { error: error } = await supabase.from('weather_cache').upsert({
-        search_id: searchData.id,
+      // Save the new data to cache
+      await supabase.from('weather_cache').upsert({
+        search_id: searchId,
         data: { current_weather: currentWeatherData, forecast: forecastData },
         last_fetched: new Date().toISOString(),
       });
 
-      if (error) {
-        console.error('Error saving weather data to cache:', error);
-        toast({
-          title: "Warning",
-          description: "Failed to cache weather data. This may affect performance.",
-          variant: "destructive",
-        });
-      }
-
-      await fetchSearchHistory();
     } catch (error) {
       console.error('Failed to fetch weather data:', error);
       let errorMessage = "An unexpected error occurred. Please try again.";
@@ -173,115 +172,99 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
-  const handleHistoryClick = async (search_id: number) => {
-    setIsLoading(true);
-
-    try {
-      // Fetch the search history item
-      const { data: searchItem, error: searchError } = await supabase
-        .from('search_history')
-        .select('city, country')
-        .eq('id', search_id)
-        .single();
-
-      if (searchError) {
-        console.error('Error fetching search history item:', searchError);
-        toast({
-          title: "Error",
-          description: "Failed to fetch search history item.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!searchItem) {
-        console.error('Search history item not found');
-        toast({
-          title: "Error",
-          description: "Search history item not found.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Check if cached weather data exists and is still valid (within 10 minutes)
-      const { data: cachedData, error: cacheError } = await supabase
-        .from('weather_cache')
-        .select('*')
-        .eq('search_id', search_id)
-        .single();
-
-      if (cacheError && cacheError.code !== 'PGRST116') {
-        console.error('Error fetching cached data:', cacheError);
-      }
-
-      if (cachedData) {
-        const cacheAge = new Date().getTime() - new Date(cachedData.last_fetched).getTime();
-        const cacheIsValid = cacheAge < 10 * 60 * 1000; // 10 minutes in milliseconds
-
-        if (cacheIsValid) {
-          // Use cached data
-          setCurrentWeather(cachedData.data.current_weather);
-          setForecast(cachedData.data.forecast);
-          setCity(searchItem.city);
-          setCountry(searchItem.country);
-          return;
-        }
-      }
-
-      // If no valid cache, fetch new data
-      setCity(searchItem.city);
-      setCountry(searchItem.country);
-      await handleSearch();
-
-    } catch (error) {
-      console.error('Error handling search history click:', error);
+    // Prevent empty searches
+    if (!city.trim() || !country.trim()) {
       toast({
         title: "Error",
-        description: "Failed to process search history item.",
+        description: "Please enter both city and country.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Check if this search already exists in history
+      const { data: existingSearch, error: searchError } = await supabase
+        .from('search_history')
+        .select('id')
+        .eq('city', city.trim())
+        .eq('country', country.trim())
+        .single();
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error('Error checking existing search:', searchError);
+      }
+
+      let searchId: number;
+
+      if (existingSearch) {
+        searchId = existingSearch.id;
+        // Update the timestamp of the existing search
+        await supabase
+          .from('search_history')
+          .update({ timestamp: new Date().toISOString() })
+          .eq('id', searchId);
+      } else {
+        // Insert new search into history
+        const { data: newSearch, error: insertError } = await supabase
+          .from('search_history')
+          .insert({ city: city.trim(), country: country.trim() })
+          .select()
+          .single();
+
+        if (insertError) {
+          throw new Error(`Failed to save search history: ${insertError.message}`);
+        }
+
+        searchId = newSearch.id;
+      }
+
+      await fetchWeatherData(searchId, city.trim(), country.trim());
+      await fetchSearchHistory();
+
+    } catch (error) {
+      console.error('Error handling search:', error);
+      toast({
+        title: "Error",
+        description: "Failed to process your search. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
-  const fetchSearchHistory = async (): Promise<SearchHistoryRecord[]> => {
-    const { data: { user } } = await supabase.auth.getUser(); // Get the authenticated user
-
-    if (!user) {
-      console.error('No user is logged in.');
-      return [];
-    }
-
-    const { data, error } = await supabase
+  const handleHistoryClick = async (searchId: number) => {
+    const { data: searchItem, error: searchError } = await supabase
       .from('search_history')
-      .select('*')
-      .eq('user_id', user.id) // Filter by user ID
-      .order('timestamp', { ascending: false })
-      .limit(5);
+      .select('city, country')
+      .eq('id', searchId)
+      .single();
 
-    if (error) {
-      console.error('Failed to fetch search history:', error);
-      return [];
+    if (searchError) {
+      console.error('Error fetching search history item:', searchError);
+      toast({
+        title: "Error",
+        description: "Failed to fetch search history item.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    return data as SearchHistoryRecord[];
+    if (searchItem) {
+      setCity(searchItem.city);
+      setCountry(searchItem.country);
+      await fetchWeatherData(searchId, searchItem.city, searchItem.country);
+    }
   };
 
   const handleClearHistory = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('No user is logged in.');
-        return;
-      }
-
       const { error } = await supabase
         .from('search_history')
         .delete()
-        .eq('user_id', user.id);
+        .neq('id', 0);  // This will delete all rows
 
       if (error) {
         console.error('Failed to clear search history:', error);
@@ -292,6 +275,10 @@ const Dashboard: React.FC = () => {
         });
       } else {
         setSearchHistory([]);
+        setCity('');
+        setCountry('');
+        setCurrentWeather(null);
+        setForecast(null);
         toast({
           title: "Success",
           description: "Search history cleared successfully.",
@@ -307,6 +294,14 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/');
+    toast({
+      title: "Signed Out",
+      description: "You have been successfully signed out.",
+    });
+  };
 
   return (
     <motion.div

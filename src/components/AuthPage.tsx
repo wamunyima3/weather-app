@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { EyeIcon, EyeOffIcon, MailIcon } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
-
+import { useNavigate } from 'react-router-dom'
 
 const formVariants = {
   hidden: { opacity: 0, y: 50 },
@@ -27,6 +27,7 @@ const SignInForm = () => {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+  const navigate = useNavigate()
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,6 +45,7 @@ const SignInForm = () => {
         title: "Success",
         description: "You have successfully signed in!",
       })
+      navigate('/dashboard')
     }
   }
 
@@ -59,12 +61,12 @@ const SignInForm = () => {
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">
-            <motion.div whileFocus="focus"  variants={inputVariants}>
-              <Input 
-                id="email" 
-                placeholder="name@example.com" 
-                type="email" 
-                required 
+            <motion.div whileFocus="focus" variants={inputVariants}>
+              <Input
+                id="email"
+                placeholder="name@example.com"
+                type="email"
+                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -123,7 +125,16 @@ const SignUpForm = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    const { error } = await supabase.auth.signUp({ email, password })
+    const redirectTo = import.meta.env.VITE_NODE_ENV === 'production'
+      ? 'https://your-app-name.vercel.app/auth/callback'
+      : 'http://localhost:3000/auth/callback'
+    const { error } = await supabase.auth.signUp({
+      email: email,
+      password: password,
+      options: {
+        emailRedirectTo: redirectTo,
+      },
+    })
     setIsLoading(false)
     if (error) {
       toast({
@@ -152,10 +163,10 @@ const SignUpForm = () => {
           <Label htmlFor="email">Email</Label>
           <div className="relative">
             <motion.div whileFocus="focus" variants={inputVariants}>
-              <Input 
-                id="email" 
-                placeholder="name@example.com" 
-                type="email" 
+              <Input
+                id="email"
+                placeholder="name@example.com"
+                type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -213,7 +224,10 @@ const PasswordResetForm = () => {
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    const { error } = await supabase.auth.resetPasswordForEmail(email)
+    const redirectTo = import.meta.env.VITE_NODE_ENV === 'production'
+      ? 'https://your-app-name.vercel.app/auth/reset-password'
+      : 'http://localhost:3000/auth/reset-password'
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setIsLoading(false)
     if (error) {
       toast({
@@ -242,10 +256,10 @@ const PasswordResetForm = () => {
           <Label htmlFor="email">Email</Label>
           <div className="relative">
             <motion.div whileFocus="focus" variants={inputVariants}>
-              <Input 
-                id="email" 
-                placeholder="name@example.com" 
-                type="email" 
+              <Input
+                id="email"
+                placeholder="name@example.com"
+                type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -268,6 +282,20 @@ const PasswordResetForm = () => {
 }
 
 export default function AuthPage() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        navigate('/dashboard')
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [navigate])
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <motion.div
@@ -287,11 +315,11 @@ export default function AuthPage() {
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
                 <TabsTrigger value="reset">Reset</TabsTrigger>
               </TabsList>
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 <TabsContent value="signin" key="signin">
                   <SignInForm />
                 </TabsContent>
-                <TabsContent value="signup"  key="signup">
+                <TabsContent value="signup" key="signup">
                   <SignUpForm />
                 </TabsContent>
                 <TabsContent value="reset" key="reset">

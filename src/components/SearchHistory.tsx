@@ -37,7 +37,7 @@ const itemVariants = {
 export default function SearchHistory({ searchHistory, onClose, onHistoryClick, onClearHistory }: SearchHistorySidebarProps) {
   return (
     <motion.div
-      className="bg-white p-2 h-full overflow-y-auto"
+      className="bg-white p-4 h-full overflow-y-auto"
       variants={containerVariants}
       initial="hidden"
       animate="visible"

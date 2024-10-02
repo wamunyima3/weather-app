@@ -100,52 +100,60 @@ const Dashboard: React.FC = () => {
   };
 
   const fetchWeatherData = async (searchId: number, city: string, country: string) => {
-    // setIsCurrentWeatherLoading(true);
-    // setIsForecastLoading(true);
+    setIsLoading(true);
 
     try {
+      // First, check if we have cached data
       const { data: cachedData, error: cacheError } = await supabase
         .from('weather_cache')
         .select('*')
-        .eq('search_id', searchId)
-        .single();
+        .eq('search_id', searchId);
 
-      if (cacheError && cacheError.code !== 'PGRST116') {
+      if (cacheError) {
         console.error('Error fetching cached data:', cacheError);
       }
 
-      if (cachedData) {
-        const cacheAge = new Date().getTime() - new Date(cachedData.last_fetched).getTime();
-        const cacheIsValid = cacheAge < 10 * 60 * 1000;
+      if (cachedData && cachedData.length > 0) {
+        const cacheAge = new Date().getTime() - new Date(cachedData[0].last_fetched).getTime();
+        const cacheIsValid = cacheAge < 10 * 60 * 1000; // 10 minutes
 
         if (cacheIsValid) {
-          setCurrentWeather(cachedData.data.current_weather);
-          setForecast(cachedData.data.forecast);
-          // setIsCurrentWeatherLoading(false);
-          // setIsForecastLoading(false);
+          const parsedData = JSON.parse(cachedData[0].data);
+          setCurrentWeather(parsedData.current_weather);
+          setForecast(parsedData.forecast);
+          setIsLoading(false);
           return;
-        } 
+        }
       }
 
+      // If no valid cache, fetch new data
       const currentResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/current`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY },
       });
       const currentWeatherData = currentResponse.data.data[0];
-      setCurrentWeather(currentWeatherData);
-      // setIsCurrentWeatherLoading(false);
 
       const forecastResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/forecast/daily`, {
         params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY, days: 16 },
       });
       const forecastData = forecastResponse.data.data;
-      setForecast(forecastData);
-      // setIsForecastLoading(false);
 
-      await supabase.from('weather_cache').upsert({
-        search_id: searchId,
-        data: JSON.stringify({ current_weather: currentWeatherData, forecast: forecastData }),
-        last_fetched: new Date().toISOString(),
-      });
+      // Update state
+      setCurrentWeather(currentWeatherData);
+      setForecast(forecastData);
+
+      // Cache the new data
+      const newCacheData = JSON.stringify({ current_weather: currentWeatherData, forecast: forecastData });
+      const { error: upsertError } = await supabase
+        .from('weather_cache')
+        .upsert({
+          search_id: searchId,
+          data: newCacheData,
+          last_fetched: new Date().toISOString(),
+        });
+
+      if (upsertError) {
+        console.error('Error upserting weather cache:', upsertError);
+      }
 
     } catch (error) {
       console.error('Failed to fetch weather data:', error);
@@ -176,8 +184,7 @@ const Dashboard: React.FC = () => {
         variant: "destructive",
       });
     } finally {
-      // setIsCurrentWeatherLoading(false);
-      // setIsForecastLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -196,47 +203,64 @@ const Dashboard: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { data: existingSearch, error: searchError } = await supabase
+      // First, check if the search already exists
+      const { data: existingSearches, error: searchError } = await supabase
         .from('search_history')
         .select('id')
         .eq('city', city.trim())
         .eq('country', country.trim())
-        .single();
+        .eq('user_id', session?.user.id);
 
-      if (searchError && searchError.code !== 'PGRST116') {
+      if (searchError) {
         console.error('Error checking existing search:', searchError);
+        throw new Error('Failed to check existing search');
       }
 
       let searchId: number;
 
-      if (existingSearch) {
-        searchId = existingSearch.id;
-        await supabase
+      if (existingSearches && existingSearches.length > 0) {
+        // If the search exists, update its timestamp
+        searchId = existingSearches[0].id;
+        const { error: updateError } = await supabase
           .from('search_history')
           .update({ timestamp: new Date().toISOString() })
           .eq('id', searchId);
+
+        if (updateError) {
+          console.error('Error updating search history:', updateError);
+          throw new Error('Failed to update search history');
+        }
       } else {
+        // If it's a new search, insert it and get the new ID
         const { data: newSearch, error: insertError } = await supabase
           .from('search_history')
-          .insert({ city: city.trim(), country: country.trim() })
+          .insert({ city: city.trim(), country: country.trim(), user_id: session?.user.id })
           .select()
           .single();
 
         if (insertError) {
-          throw new Error(`Failed to save search history: ${insertError.message}`);
+          console.error('Error inserting new search:', insertError);
+          throw new Error('Failed to save search history');
+        }
+
+        if (!newSearch) {
+          throw new Error('Failed to create new search history entry');
         }
 
         searchId = newSearch.id;
       }
 
+      // Now that we have the searchId, fetch the weather data
       await fetchWeatherData(searchId, city.trim(), country.trim());
+
+      // After fetching weather data, update the search history
       await fetchSearchHistory();
 
     } catch (error) {
       console.error('Error handling search:', error);
       toast({
         title: "Error",
-        description: "Failed to process your search. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to process your search. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -275,7 +299,7 @@ const Dashboard: React.FC = () => {
         .delete()
         .neq('id', 0);
 
-    if (error) {
+      if (error) {
         console.error('Failed to clear search history:', error);
         toast({
           title: "Error",
@@ -348,25 +372,25 @@ const Dashboard: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">Weather App</h1>
             <div className="flex space-x-2">
               <Sheet>
-            <SheetTrigger asChild>
+                <SheetTrigger asChild>
                   <Button variant="outline" className="md:hidden" aria-label="Open search history">
                     <Menu className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left">
-              <SheetHeader>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left">
+                  <SheetHeader>
                     <SheetTitle>Search History</SheetTitle>
                     <SheetDescription>
                       Your recent searches are stored here
                     </SheetDescription>
-              </SheetHeader>
-              <SearchHistory 
-                searchHistory={searchHistory} 
-                onHistoryClick={handleHistoryClick} 
+                  </SheetHeader>
+                  <SearchHistory
+                    searchHistory={searchHistory}
+                    onHistoryClick={handleHistoryClick}
                     onClearHistory={handleClearHistory}
-              />
-            </SheetContent>
-          </Sheet>
+                  />
+                </SheetContent>
+              </Sheet>
               {!isSidebarOpen && (
                 <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                   <Button variant="outline" className="hidden md:flex" onClick={() => setIsSidebarOpen(true)} aria-label="Show search history">
@@ -378,8 +402,8 @@ const Dashboard: React.FC = () => {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button variant="outline" onClick={handleSignOut} aria-label="Sign out">
                   <LogOut className="h-4 w-4 mr-2" />
-          Sign Out
-        </Button>
+                  Sign Out
+                </Button>
               </motion.div>
             </div>
           </motion.div>
@@ -412,39 +436,39 @@ const Dashboard: React.FC = () => {
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button type="submit" disabled={isLoading} aria-label="Search weather">
                 {isLoading ? <RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-              Search
-            </Button>
+                Search
+              </Button>
             </motion.div>
           </motion.form>
 
           <AnimatePresence mode="wait">
-          {currentWeather && (
-            <motion.div
+            {currentWeather && (
+              <motion.div
                 key="current-weather"
                 initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
-            >
-                <CurrentWeather data={currentWeather} /*isLoading={isCurrentWeatherLoading}*/  />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <AnimatePresence>
-          {forecast && (
-            <motion.div
+              >
+                <CurrentWeather data={currentWeather} /*isLoading={isCurrentWeatherLoading}*/ />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {forecast && (
+              <motion.div
                 key="forecast"
                 initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.3 }}
-            >
+              >
                 <Forecast data={forecast} /*isLoading={isForecastLoading}*/ />
-            </motion.div>
-          )}
-        </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-    </div>
+      </div>
     </motion.div>
   );
 };

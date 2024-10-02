@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from "@/hooks/use-toast"
 import { Session } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface SearchHistoryRecord {
   id: number;
@@ -41,6 +42,7 @@ const Dashboard: React.FC = () => {
   // const [isCurrentWeatherLoading, setIsCurrentWeatherLoading] = useState<boolean>(false);
   // const [isForecastLoading, setIsForecastLoading] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -269,6 +271,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleHistoryClick = async (searchId: number) => {
+    setIsSheetOpen(false);
     const { data: searchItem, error: searchError } = await supabase
       .from('search_history')
       .select('city, country')
@@ -346,7 +349,7 @@ const Dashboard: React.FC = () => {
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div
-            className="hidden md:block"
+            className="hidden md:block w-64 bg-white shadow-lg"
             initial={{ x: -250 }}
             animate={{ x: 0 }}
             exit={{ x: -250 }}
@@ -371,13 +374,13 @@ const Dashboard: React.FC = () => {
           >
             <h1 className="text-3xl font-bold text-gray-900">Weather App</h1>
             <div className="flex space-x-2">
-              <Sheet>
+              <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" className="md:hidden" aria-label="Open search history">
                     <Menu className="h-4 w-4" />
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left">
+                <SheetContent side="left" className="w-[300px] sm:w-[400px]">
                   <SheetHeader>
                     <SheetTitle>Search History</SheetTitle>
                     <SheetDescription>
@@ -442,29 +445,41 @@ const Dashboard: React.FC = () => {
           </motion.form>
 
           <AnimatePresence mode="wait">
-            {currentWeather && (
+            {isLoading ? (
               <motion.div
-                key="current-weather"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
               >
-                <CurrentWeather data={currentWeather} /*isLoading={isCurrentWeatherLoading}*/ />
+                <Skeleton className="w-full h-[200px] rounded-lg bg-gray-200" />
+                <Skeleton className="w-full h-[400px] mt-4 rounded-lg bg-gray-200" />
               </motion.div>
-            )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {forecast && (
-              <motion.div
-                key="forecast"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Forecast data={forecast} /*isLoading={isForecastLoading}*/ />
-              </motion.div>
+            ) : (
+              <>
+                {currentWeather && (
+                  <motion.div
+                    key="current-weather"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <CurrentWeather data={currentWeather} />
+                  </motion.div>
+                )}
+                {forecast && (
+                  <motion.div
+                    key="forecast"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Forecast data={forecast} />
+                  </motion.div>
+                )}
+              </>
             )}
           </AnimatePresence>
         </div>

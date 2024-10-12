@@ -78,6 +78,7 @@ const Dashboard: React.FC = () => {
       const { data, error } = await supabase
         .from('search_history')
         .select('*')
+        .eq('user_id',session?.user.id)
         .order('timestamp', { ascending: false })
         .limit(5);
 

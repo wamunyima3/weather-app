@@ -283,9 +283,21 @@ const PasswordResetForm = () => {
 
 export default function AuthPage() {
   const navigate = useNavigate()
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        navigate('/dashboard')
+      } else {
+        setIsLoading(false)
+      }
+    }
+
+    checkUser()
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN') {
         navigate('/dashboard')
       }
@@ -295,6 +307,20 @@ export default function AuthPage() {
       authListener.subscription.unsubscribe()
     }
   }, [navigate])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <p className="text-lg font-semibold">Loading...</p>
+        </motion.div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">

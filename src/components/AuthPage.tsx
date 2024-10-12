@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,15 +10,56 @@ import { EyeIcon, EyeOffIcon, MailIcon } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
 import { useNavigate } from 'react-router-dom'
 
-const formVariants = {
-  hidden: { opacity: 0, y: 50 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
-  exit: { opacity: 0, y: -50, transition: { duration: 0.3 } }
-}
-
-const inputVariants = {
-  focus: { scale: 1.05, transition: { duration: 0.2 } },
-  blur: { scale: 1, transition: { duration: 0.2 } }
+const LoadingAnimation = () => {
+  return (
+    <div className="flex items-center justify-center">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="100"
+        height="100"
+        viewBox="0 0 100 100"
+      >
+        <motion.path
+          d="M25,50 A25,25 0 0,1 75,50 A25,25 0 0,1 25,50 Z"
+          fill="none"
+          stroke="#3b82f6"
+          strokeWidth="5"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{
+            duration: 2,
+            ease: "easeInOut",
+            repeat: Infinity,
+          }}
+        />
+        <motion.circle
+          cx="50"
+          cy="50"
+          r="20"
+          fill="#3b82f6"
+          initial={{ scale: 0 }}
+          animate={{ scale: [0, 1, 0] }}
+          transition={{
+            duration: 2,
+            ease: "easeInOut",
+            repeat: Infinity,
+          }}
+        />
+        <motion.path
+          d="M50,25 L50,75 M25,50 L75,50"
+          stroke="#3b82f6"
+          strokeWidth="3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{
+            duration: 2,
+            ease: "easeInOut",
+            repeat: Infinity,
+          }}
+        />
+      </svg>
+    </div>
+  )
 }
 
 const SignInForm = () => {
@@ -54,14 +95,18 @@ const SignInForm = () => {
       initial="hidden"
       animate="visible"
       exit="exit"
-      variants={formVariants}
+      variants={{
+        hidden: { opacity: 0, y: 50 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+        exit: { opacity: 0, y: -50, transition: { duration: 0.3 } }
+      }}
       onSubmit={handleSignIn}
     >
       <div className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">
-            <motion.div whileFocus="focus" variants={inputVariants}>
+            <motion.div whileFocus={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Input
                 id="email"
                 placeholder="name@example.com"
@@ -77,7 +122,7 @@ const SignInForm = () => {
         <div className="grid gap-2">
           <Label htmlFor="password">Password</Label>
           <div className="relative">
-            <motion.div whileFocus="focus" variants={inputVariants}>
+            <motion.div whileFocus={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Input
                 id="password"
                 placeholder='password'
@@ -155,14 +200,18 @@ const SignUpForm = () => {
       initial="hidden"
       animate="visible"
       exit="exit"
-      variants={formVariants}
+      variants={{
+        hidden: { opacity: 0, y: 50 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+        exit: { opacity: 0, y: -50, transition: { duration: 0.3 } }
+      }}
       onSubmit={handleSignUp}
     >
       <div className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">
-            <motion.div whileFocus="focus" variants={inputVariants}>
+            <motion.div whileFocus={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Input
                 id="email"
                 placeholder="name@example.com"
@@ -178,7 +227,7 @@ const SignUpForm = () => {
         <div className="grid gap-2">
           <Label htmlFor="password">Password</Label>
           <div className="relative">
-            <motion.div whileFocus="focus" variants={inputVariants}>
+            <motion.div whileFocus={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -248,14 +297,18 @@ const PasswordResetForm = () => {
       initial="hidden"
       animate="visible"
       exit="exit"
-      variants={formVariants}
+      variants={{
+        hidden: { opacity: 0, y: 50 },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
+        exit: { opacity: 0, y: -50, transition: { duration: 0.3 } }
+      }}
       onSubmit={handlePasswordReset}
     >
       <div className="grid gap-4">
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>
           <div className="relative">
-            <motion.div whileFocus="focus" variants={inputVariants}>
+            <motion.div whileFocus={{ scale: 1.05 }} transition={{ duration: 0.2 }}>
               <Input
                 id="email"
                 placeholder="name@example.com"
@@ -297,7 +350,7 @@ export default function AuthPage() {
 
     checkUser()
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN') {
         navigate('/dashboard')
       }
@@ -316,7 +369,15 @@ export default function AuthPage() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <p className="text-lg font-semibold">Loading...</p>
+          <LoadingAnimation />
+          <motion.p
+            className="text-lg font-semibold mt-4 text-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+          >
+            Checking authentication...
+          </motion.p>
         </motion.div>
       </div>
     )
@@ -341,7 +402,7 @@ export default function AuthPage() {
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
                 <TabsTrigger value="reset">Reset</TabsTrigger>
               </TabsList>
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 <TabsContent value="signin" key="signin">
                   <SignInForm />
                 </TabsContent>
@@ -349,6 +410,7 @@ export default function AuthPage() {
                   <SignUpForm />
                 </TabsContent>
                 <TabsContent value="reset" key="reset">
+                  
                   <PasswordResetForm />
                 </TabsContent>
               </AnimatePresence>

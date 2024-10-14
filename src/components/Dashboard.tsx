@@ -1,9 +1,10 @@
+"use client"
+
 import { useState, useEffect } from 'react';
-import axios, { AxiosError } from 'axios';
 import { supabase } from '../supabaseClient';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, RefreshCcw, Menu, LogOut, } from 'lucide-react';
+import { Search, RefreshCcw, Menu, LogOut } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import CurrentWeather from './CurrentWeather';
 import Forecast from './Forecast';
@@ -13,6 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Session } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { Skeleton } from "@/components/ui/skeleton"
+import { fetchSearchHistory, fetchWeatherData, saveSearch, clearSearchHistory, signOut, getSession } from './api'
 
 interface SearchHistoryRecord {
   id: number;
@@ -32,15 +34,13 @@ interface ForecastData {
   datetime: string;
 }
 
-const Dashboard: React.FC = () => {
+export default function Dashboard() {
   const [city, setCity] = useState<string>('');
   const [country, setCountry] = useState<string>('');
   const [currentWeather, setCurrentWeather] = useState<any>(null);
   const [forecast, setForecast] = useState<ForecastData[] | null>(null);
   const [searchHistory, setSearchHistory] = useState<SearchHistoryRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  // const [isCurrentWeatherLoading, setIsCurrentWeatherLoading] = useState<boolean>(false);
-  // const [isForecastLoading, setIsForecastLoading] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -48,49 +48,49 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (!session) {
-        navigate('/');
+    const checkSession = async () => {
+      try {
+        const { session } = await getSession()
+        setSession(session)
+        if (!session) {
+          navigate('/')
+        }
+      } catch (error) {
+        console.error('Error checking session:', error)
+        navigate('/')
       }
-    });
+    }
+
+    checkSession()
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+      setSession(session)
       if (!session) {
-        navigate('/');
+        navigate('/')
       }
-    });
+    })
 
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    return () => subscription.unsubscribe()
+  }, [navigate])
 
   useEffect(() => {
     if (session) {
-      fetchSearchHistory();
+      handleFetchSearchHistory();
     }
   }, [session]);
 
-  const fetchSearchHistory = async () => {
+  const handleFetchSearchHistory = async () => {
     try {
-      const { data, error } = await supabase
-        .from('search_history')
-        .select('*')
-        .eq('user_id',session?.user.id)
-        .order('timestamp', { ascending: false })
-        .limit(5);
+      const data = await fetchSearchHistory(session!.user.id);
+      setSearchHistory(data);
 
-      if (error) throw error;
-
-      setSearchHistory(data as SearchHistoryRecord[]);
-
-      if (data && data.length > 0) {
+      if (data.length > 0) {
         const lastSearch = data[0];
         setCity(lastSearch.city);
         setCountry(lastSearch.country);
-        await fetchWeatherData(lastSearch.id, lastSearch.city, lastSearch.country);
+        await handleFetchWeatherData(lastSearch.id, lastSearch.city, lastSearch.country);
       }
     } catch (error) {
       console.error('Failed to fetch search history:', error);
@@ -102,88 +102,17 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const fetchWeatherData = async (searchId: number, city: string, country: string) => {
+  const handleFetchWeatherData = async (searchId: number, city: string, country: string) => {
     setIsLoading(true);
-
     try {
-      // First, check if we have cached data
-      const { data: cachedData, error: cacheError } = await supabase
-        .from('weather_cache')
-        .select('*')
-        .eq('search_id', searchId);
-
-      if (cacheError) {
-        console.error('Error fetching cached data:', cacheError);
-      }
-
-      if (cachedData && cachedData.length > 0) {
-        const cacheAge = new Date().getTime() - new Date(cachedData[0].last_fetched).getTime();
-        const cacheIsValid = cacheAge < 10 * 60 * 1000; // 10 minutes
-
-        if (cacheIsValid) {
-          const parsedData = JSON.parse(cachedData[0].data);
-          setCurrentWeather(parsedData.current_weather);
-          setForecast(parsedData.forecast);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // If no valid cache, fetch new data
-      const currentResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/current`, {
-        params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY },
-      });
-      const currentWeatherData = currentResponse.data.data[0];
-
-      const forecastResponse = await axios.get(`${import.meta.env.VITE_WEATHERBIT_URL}/forecast/daily`, {
-        params: { city, country, key: import.meta.env.VITE_WEATHERBIT_API_KEY, days: 16 },
-      });
-      const forecastData = forecastResponse.data.data;
-
-      // Update state
-      setCurrentWeather(currentWeatherData);
-      setForecast(forecastData);
-
-      // Cache the new data
-      const newCacheData = JSON.stringify({ current_weather: currentWeatherData, forecast: forecastData });
-      const { error: upsertError } = await supabase
-        .from('weather_cache')
-        .upsert({
-          search_id: searchId,
-          data: newCacheData,
-          last_fetched: new Date().toISOString(),
-        });
-
-      if (upsertError) {
-        console.error('Error upserting weather cache:', upsertError);
-      }
-
+      const data = await fetchWeatherData(searchId, city, country);
+      setCurrentWeather(data.current_weather);
+      setForecast(data.forecast);
     } catch (error) {
       console.error('Failed to fetch weather data:', error);
-      let errorMessage = "An unexpected error occurred. Please try again.";
-
-      if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError;
-        if (axiosError.response) {
-          if (axiosError.response.status === 404) {
-            errorMessage = "City not found. Please check the city name and country code.";
-          } else if (axiosError.response.status === 429) {
-            errorMessage = "Too many requests. Please try again later.";
-          } else {
-            errorMessage = `Server error: ${axiosError.response.status} - ${axiosError.response.statusText}`;
-          }
-        } else if (axiosError.request) {
-          errorMessage = "No response received from the server. Please check your internet connection.";
-        } else {
-          errorMessage = `Error setting up the request: ${axiosError.message}`;
-        }
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-
       toast({
         title: "Error",
-        description: errorMessage,
+        description: "Failed to fetch weather data. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -206,64 +135,14 @@ const Dashboard: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // First, check if the search already exists
-      const { data: existingSearches, error: searchError } = await supabase
-        .from('search_history')
-        .select('id')
-        .eq('city', city.trim())
-        .eq('country', country.trim())
-        .eq('user_id', session?.user.id);
-
-      if (searchError) {
-        console.error('Error checking existing search:', searchError);
-        throw new Error('Failed to check existing search');
-      }
-
-      let searchId: number;
-
-      if (existingSearches && existingSearches.length > 0) {
-        // If the search exists, update its timestamp
-        searchId = existingSearches[0].id;
-        const { error: updateError } = await supabase
-          .from('search_history')
-          .update({ timestamp: new Date().toISOString() })
-          .eq('id', searchId);
-
-        if (updateError) {
-          console.error('Error updating search history:', updateError);
-          throw new Error('Failed to update search history');
-        }
-      } else {
-        // If it's a new search, insert it and get the new ID
-        const { data: newSearch, error: insertError } = await supabase
-          .from('search_history')
-          .insert({ city: city.trim(), country: country.trim(), user_id: session?.user.id })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Error inserting new search:', insertError);
-          throw new Error('Failed to save search history');
-        }
-
-        if (!newSearch) {
-          throw new Error('Failed to create new search history entry');
-        }
-
-        searchId = newSearch.id;
-      }
-
-      // Now that we have the searchId, fetch the weather data
-      await fetchWeatherData(searchId, city.trim(), country.trim());
-
-      // After fetching weather data, update the search history
-      await fetchSearchHistory();
-
+      const searchId = await saveSearch(session!.user.id, city, country);
+      await handleFetchWeatherData(searchId, city.trim(), country.trim());
+      await handleFetchSearchHistory();
     } catch (error) {
       console.error('Error handling search:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process your search. Please try again.",
+        description: "Failed to process your search. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -273,54 +152,26 @@ const Dashboard: React.FC = () => {
 
   const handleHistoryClick = async (searchId: number) => {
     setIsSheetOpen(false);
-    const { data: searchItem, error: searchError } = await supabase
-      .from('search_history')
-      .select('city, country')
-      .eq('id', searchId)
-      .single();
-
-    if (searchError) {
-      console.error('Error fetching search history item:', searchError);
-      toast({
-        title: "Error",
-        description: "Failed to fetch search history item.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (searchItem) {
-      setCity(searchItem.city);
-      setCountry(searchItem.country);
-      await fetchWeatherData(searchId, searchItem.city, searchItem.country);
+    const historyItem = searchHistory.find(item => item.id === searchId);
+    if (historyItem) {
+      setCity(historyItem.city);
+      setCountry(historyItem.country);
+      await handleFetchWeatherData(searchId, historyItem.city, historyItem.country);
     }
   };
 
   const handleClearHistory = async () => {
     try {
-      const { error } = await supabase
-        .from('search_history')
-        .delete()
-        .neq('id', 0);
-
-      if (error) {
-        console.error('Failed to clear search history:', error);
-        toast({
-          title: "Error",
-          description: "Failed to clear search history.",
-          variant: "destructive",
-        });
-      } else {
-        setSearchHistory([]);
-        setCity('');
-        setCountry('');
-        setCurrentWeather(null);
-        setForecast(null);
-        toast({
-          title: "Success",
-          description: "Search history cleared successfully.",
-        });
-      }
+      await clearSearchHistory();
+      setSearchHistory([]);
+      setCity('');
+      setCountry('');
+      setCurrentWeather(null);
+      setForecast(null);
+      toast({
+        title: "Success",
+        description: "Search history cleared successfully.",
+      });
     } catch (error) {
       console.error('Error clearing search history:', error);
       toast({
@@ -332,13 +183,22 @@ const Dashboard: React.FC = () => {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
-    toast({
-      title: "Signed Out",
-      description: "You have been successfully signed out.",
-    });
-  };
+    try {
+      await signOut()
+      navigate('/')
+      toast({
+        title: "Signed Out",
+        description: "You have been successfully signed out.",
+      })
+    } catch (error) {
+      console.error('Error signing out:', error)
+      toast({
+        title: "Error",
+        description: "An error occurred while signing out. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <motion.div
@@ -487,6 +347,4 @@ const Dashboard: React.FC = () => {
       </div>
     </motion.div>
   );
-};
-
-export default Dashboard;
+}

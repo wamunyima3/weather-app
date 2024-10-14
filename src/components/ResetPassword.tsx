@@ -1,5 +1,6 @@
+"use client"
+
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabaseClient'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
+import { updateUserPassword, getSession } from './api'
 
 const formVariants = {
   hidden: { opacity: 0, y: 50 },
@@ -28,10 +30,14 @@ export default function ResetPassword() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Check if the user is in a password reset flow
     const checkPasswordResetFlow = async () => {
-      const { data, error } = await supabase.auth.getSession()
-      if (error || !data.session) {
+      try {
+        const { session } = await getSession()
+        if (!session) {
+          navigate('/auth')
+        }
+      } catch (error) {
+        console.error('Error checking session:', error)
         navigate('/auth')
       }
     }
@@ -41,20 +47,21 @@ export default function ResetPassword() {
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
-    setIsLoading(false)
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      })
-    } else {
+    try {
+      await updateUserPassword(newPassword)
       toast({
         title: "Success",
         description: "Your password has been reset successfully!",
       })
       navigate('/dashboard')
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An error occurred while resetting your password.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 

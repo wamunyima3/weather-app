@@ -1,5 +1,6 @@
+"use client"
+
 import { useState, useEffect } from 'react'
-import { supabase } from '../supabaseClient'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { EyeIcon, EyeOffIcon, MailIcon } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
 import { useNavigate } from 'react-router-dom'
+import { signInWithPassword, signUp, resetPasswordForEmail, getSession } from './api'
 
 const LoadingAnimation = () => {
   return (
@@ -73,20 +75,21 @@ const SignInForm = () => {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    setIsLoading(false)
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      })
-    } else {
+    try {
+      await signInWithPassword(email, password)
       toast({
         title: "Success",
         description: "You have successfully signed in!",
       })
       navigate('/dashboard')
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An error occurred during sign in.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -170,28 +173,20 @@ const SignUpForm = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    const redirectTo = import.meta.env.VITE_NODE_ENV === 'production'
-      ? 'https://weather-app-delta-lime-58.vercel.app/auth/callback'
-      : 'http://localhost:3000/auth/callback'
-    const { error } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-      options: {
-        emailRedirectTo: redirectTo,
-      },
-    })
-    setIsLoading(false)
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      })
-    } else {
+    try {
+      await signUp(email, password)
       toast({
         title: "Success",
         description: "Check your email to confirm your account!",
       })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An error occurred during sign up.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -273,22 +268,20 @@ const PasswordResetForm = () => {
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    const redirectTo = import.meta.env.VITE_NODE_ENV === 'production'
-      ? 'https://weather-app-delta-lime-58.vercel.app/auth/reset-password'
-      : 'http://localhost:3000/auth/reset-password'
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
-    setIsLoading(false)
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      })
-    } else {
+    try {
+      await resetPasswordForEmail(email)
       toast({
         title: "Success",
         description: "Check your email for password reset instructions!",
       })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An error occurred during password reset.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -340,25 +333,20 @@ export default function AuthPage() {
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        navigate('/dashboard')
-      } else {
+      try {
+        const { session } = await getSession()
+        if (session) {
+          navigate('/dashboard')
+        } else {
+          setIsLoading(false)
+        }
+      } catch (error) {
+        console.error('Error checking user session:', error)
         setIsLoading(false)
       }
     }
 
     checkUser()
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
-        navigate('/dashboard')
-      }
-    })
-
-    return () => {
-      authListener.subscription.unsubscribe()
-    }
   }, [navigate])
 
   if (isLoading) {
@@ -410,7 +398,7 @@ export default function AuthPage() {
                   <SignUpForm />
                 </TabsContent>
                 <TabsContent value="reset" key="reset">
-                  
+
                   <PasswordResetForm />
                 </TabsContent>
               </AnimatePresence>
